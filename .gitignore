@@ -1,0 +1,7 @@
+# Large files - kernel source tarball
+*.tar.xz
+*.tar.gz
+*.tar.bz2
+
+# Full kernel driver source tree (too large for repo)
+drivers/
