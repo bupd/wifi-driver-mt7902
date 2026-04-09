@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+# NetworkManager dispatcher script for captive portal detection
+# Installed to: /etc/NetworkManager/dispatcher.d/90-captive-portal
+# License: GPL-2.0
+#
+# NetworkManager calls dispatcher scripts with:
+#   $1 = interface name (e.g., wlan0)
+#   $2 = action (up, down, connectivity-change, etc.)
+#
+# We only trigger on wireless interface "up" and "connectivity-change" events.
+
+INTERFACE="$1"
+ACTION="$2"
+
+# Only act on relevant events
+case "$ACTION" in
+    up|connectivity-change)
+        ;;
+    *)
+        exit 0
+        ;;
+esac
+
+# Only act on wireless interfaces
+if [[ ! -d "/sys/class/net/$INTERFACE/wireless" ]]; then
+    exit 0
+fi
+
+# Run the captive portal detector in the background so we don't block NM
+/usr/local/lib/mt7902/mt7902-captive-portal.sh "$INTERFACE" "$ACTION" &
+disown
+
+exit 0
