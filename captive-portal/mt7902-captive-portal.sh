@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# shellcheck disable=SC2016  # Single quotes in su -c are intentional (expand on target user's shell)
 # mt7902-captive-portal.sh — Secure captive portal detection and handler
 # Part of the MT7902 WiFi driver project
 # License: GPL-2.0
@@ -245,7 +246,7 @@ validate_url() {
 
     # 6. Extract hostname and check it
     local hostname
-    hostname=$(echo "$authority" | sed 's/:.*//')  # strip port
+    hostname="${authority%%:*}"  # strip port
 
     # No empty hostname
     if [[ -z "$hostname" ]]; then

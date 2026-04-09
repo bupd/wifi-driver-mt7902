@@ -1,0 +1,98 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint:
+    name: Lint shell scripts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install shellcheck
+        run: sudo apt-get install -y shellcheck
+
+      - name: Shellcheck captive-portal scripts
+        run: shellcheck -s bash captive-portal/*.sh captive-portal/90-captive-portal
+
+  test:
+    name: Captive portal URL validation tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run URL validation tests
+        run: |
+          bash -c '
+          source <(sed -n "/^validate_url/,/^}/p" captive-portal/mt7902-captive-portal.sh)
+
+          pass=0; fail=0
+          test_url() {
+              local url="$1" expect="$2"
+              VALIDATION_MSG=""
+              local result=0
+              validate_url "$url" || result=$?
+              local status
+              case $result in 0) status="SAFE" ;; 1) status="BLOCKED" ;; 2) status="WARN" ;; esac
+              if [[ "$status" == "$expect" ]]; then
+                  echo "PASS [$status] $url"
+                  ((pass++))
+              else
+                  echo "FAIL [$status != $expect] $url — $VALIDATION_MSG"
+                  ((fail++))
+              fi
+          }
+
+          echo "=== Safe URLs (should open) ==="
+          test_url "https://wifi.hotel.com/login" "SAFE"
+          test_url "http://192.168.1.1/portal" "SAFE"
+          test_url "http://10.0.0.1:8080/login" "SAFE"
+          test_url "https://portal.airport.com/auth?session=abc123" "SAFE"
+          test_url "http://172.16.0.1/captive" "SAFE"
+          test_url "https://captive.example.com:443/signin" "SAFE"
+
+          echo ""
+          echo "=== Blocked URLs (attacks) ==="
+          test_url "javascript:alert(1)" "BLOCKED"
+          test_url "data:text/html,<script>alert(1)</script>" "BLOCKED"
+          test_url "file:///etc/passwd" "BLOCKED"
+          test_url "ftp://evil.com/malware.exe" "BLOCKED"
+          test_url "http://legitimate.com@evil.com/phish" "BLOCKED"
+          test_url "http://127.0.0.1/steal" "BLOCKED"
+          test_url "http://localhost/evil" "BLOCKED"
+          test_url "http://169.254.169.254/metadata" "BLOCKED"
+          test_url "" "BLOCKED"
+          test_url "ssh://evil.com" "BLOCKED"
+          test_url "smb://fileserver/share" "BLOCKED"
+          test_url "http://0.0.0.0/evil" "BLOCKED"
+
+          echo ""
+          echo "=== Warned URLs (unusual port) ==="
+          test_url "http://portal.cafe.com:9999/login" "WARN"
+          test_url "https://wifi.hotel.com:12345/auth" "WARN"
+
+          echo ""
+          echo "Results: $pass passed, $fail failed"
+          if (( fail > 0 )); then exit 1; fi
+          '
+
+  patches:
+    name: Verify patches exist
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check all 11 patches are present
+        run: |
+          for i in $(seq -w 1 11); do
+            f="patches/${i}.patch"
+            if [[ ! -f "$f" ]]; then
+              echo "MISSING: $f"
+              exit 1
+            fi
+            echo "OK: $f"
+          done

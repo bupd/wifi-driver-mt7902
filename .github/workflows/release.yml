@@ -1,0 +1,53 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run validation tests before release
+        run: |
+          bash -c '
+          source <(sed -n "/^validate_url/,/^}/p" captive-portal/mt7902-captive-portal.sh)
+          pass=0; fail=0
+          test_url() {
+              local url="$1" expect="$2"; VALIDATION_MSG=""
+              local result=0; validate_url "$url" || result=$?
+              local status; case $result in 0) status="SAFE" ;; 1) status="BLOCKED" ;; 2) status="WARN" ;; esac
+              if [[ "$status" == "$expect" ]]; then ((pass++)); else ((fail++)); echo "FAIL: $url"; fi
+          }
+          test_url "https://wifi.hotel.com/login" "SAFE"
+          test_url "http://192.168.1.1/portal" "SAFE"
+          test_url "javascript:alert(1)" "BLOCKED"
+          test_url "file:///etc/passwd" "BLOCKED"
+          test_url "http://legitimate.com@evil.com/phish" "BLOCKED"
+          test_url "http://127.0.0.1/steal" "BLOCKED"
+          test_url "http://169.254.169.254/metadata" "BLOCKED"
+          test_url "http://portal.cafe.com:9999/login" "WARN"
+          if (( fail > 0 )); then echo "Tests failed"; exit 1; fi
+          echo "All $pass tests passed"
+          '
+
+      - name: Package patches
+        run: tar czf mt7902-patches-${{ github.ref_name }}.tar.gz patches/
+
+      - name: Package captive-portal
+        run: tar czf mt7902-captive-portal-${{ github.ref_name }}.tar.gz captive-portal/
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            mt7902-patches-${{ github.ref_name }}.tar.gz
+            mt7902-captive-portal-${{ github.ref_name }}.tar.gz
