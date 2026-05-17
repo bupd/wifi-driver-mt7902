@@ -1,0 +1,8 @@
+diff --git a/drivers/net/wireless/mediatek/mt76/mt7615/debugfs.c b/drivers/net/wireless/mediatek/mt76/mt7615/debugfs.c
+index 1394a4a80..ef10d59ee 100644
+--- a/drivers/net/wireless/mediatek/mt76/mt7615/debugfs.c
++++ b/drivers/net/wireless/mediatek/mt76/mt7615/debugfs.c
+@@ -3 +3,3 @@
+ #include "mt7615.h"
++#include <linux/etherdevice.h>
++#include <linux/hex.h>

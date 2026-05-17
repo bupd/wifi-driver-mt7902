@@ -62,7 +62,7 @@ tar xf linux-6.17.7.tar.xz --strip-components=1 \
   linux-6.17.7/drivers/net/wireless/mediatek/mt76/
 ```
 
-## Step 2: Apply the 11 Patches
+## Step 2: Apply the 11 MT7902 Patches
 
 The patches are based on Sean Wang's official patch series posted to linux-wireless on February 19, 2026. Below is a summary and the exact changes for each patch.
 
@@ -258,6 +258,16 @@ Registers the MT7902 SDIO device ID for systems using SDIO interface.
     .driver_data = (kernel_ulong_t)MT7902_FIRMWARE_WM },
 ```
 
+### Compatibility patch for Linux 7.0+
+
+Kernel `7.0.8-arch1-1` requires `mt7615/debugfs.c` to include the header that declares `mac_pton()`. Without it, rebuilding the DKMS package can fail with:
+
+```text
+mt7615/debugfs.c:503:14: error: implicit declaration of function 'mac_pton' [-Wimplicit-function-declaration]
+```
+
+Apply `patches/12.patch` after the 11 MT7902 backport patches when building against Linux 7.0 or newer.
+
 ## Step 3: Update Firmware
 
 **Critical step!** The firmware files shipped with `linux-firmware` before February 2026 are from July 2022 (extracted from Windows drivers) and **do not work** with this driver. You must update to the official December 2025 firmware submitted by MediaTek.
@@ -376,6 +386,23 @@ Verify the PCI alias exists:
 ```bash
 modinfo mt7921e | grep 7902
 # Should show: alias: pci:v000014C3d00007902sv*sd*bc*sc*i*
+```
+
+### DKMS shows `added` after a kernel upgrade
+If `dkms status` shows `mt7902-wifi/1.0.0: added`, the driver is registered but not installed for the running kernel. Rebuild and install it for the current kernel:
+
+```bash
+sudo dkms build mt7902-wifi/1.0.0 -k $(uname -r)
+sudo dkms install mt7902-wifi/1.0.0 -k $(uname -r) --force
+sudo modprobe mt7921e
+```
+
+Then verify the patched module is used:
+
+```bash
+modinfo mt7921e | grep -E 'filename|7902'
+lspci -nnk -d 14c3:7902
+nmcli device status
 ```
 
 ### Reverting changes
